@@ -66,6 +66,15 @@ Data Source Output Log: assuming only one document provided by each Datasource
 }
 ``` -->
 
+LLM Output Log
+```json
+{
+    "LLM_ID": LLM identifier,
+    "Input_Digests": The list of input digests,
+    "Output_Digest": The digest of output
+}
+```
+
 On-chain state definition
 ```json
 {
