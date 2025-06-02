@@ -20,35 +20,35 @@ type SimpleChaincode struct {
 	contractapi.Contract
 }
 
-// Structure of the flying record, only the droneID, droneZip and flytime are stored in the ledger for query
-// The rest are serialized and encrypted in the flyrecord field
-// if RecordID = droneID, the record is a meta record for the drone, FlyRecord holds the number of records for the drone, the rest are set empty for now, including DroneID
-// if RecordID = droneID_(digit), the record is a flying record for the drone, FlyRecord holds the encrypted flying record, the rest are set empty for now
+// Record is a generic record that can be used for any purpose
+// RecordID is the unique identifier for the record
+// StrKey0 is a key in string type for identifying the record
+// StrKey1 is another key in string type for identifying the record
+// IntKey0 is a key in int type for identifying the record
+// IntKey1 is another key in int type for identifying the record
+// RecordContent is the content of the record, it is a serialized json object
 type Record struct {
-	RecordID  string `json:"recordID"`
-	DroneID   string `json:"droneID"`
-	Zip       string `json:"zip"`
-	FlyTime   int64  `json:"flyTime"`
-	FlyRecord string `json:"flyRecord"`
-	Reserved  string `json:"reserved"`
+	RecordID      string `json:"recordID"`
+	StrKey0       string `json:"strKey0"`
+	StrKey1       string `json:"strKey1"`
+	IntKey0       int    `json:"intKey0"`
+	IntKey1       int    `json:"intKey1"`
+	RecordContent string `json:"recordContent"`
 }
 
 // SourceCredits stores the state of the source, it acts like a wallet for the source
-// The feedback 
 type SourceCredits struct {
-	SourceID string `json:"sourceID"`
+	SourceID string  `json:"sourceID"`
 	Credits  float64 `json:"credits"`
-	Reserved string `json:"reserved"`
+	Reserved string  `json:"reserved"`
 }
 
 // Feedback is the feedback from the source to the user
 type Feedback struct {
-	Output string `json:"sourceID"`
+	Output   string `json:"sourceID"`
 	Feedback string `json:"feedback"`
 	Reserved string `json:"reserved"`
 }
-
-
 
 type PaginatedQueryResult struct {
 	Records             []Record `json:"records"`
