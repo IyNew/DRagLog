@@ -45,18 +45,32 @@ Reliability Score
     "TimeStamp": The timestamp of the last update
 }
 ```
-
+```json
+{
+	"LogID": The id of the log,
+	"LoggerID": The sender's identifier,  
+	"Input": Input digest (list),
+	"InputFrom": The source of the input,
+	"Output": Output digest,    
+	"OutputTo": Receiver's identifier,
+	"Timestamp": The timestamp of the log,  
+	"Reserved": reserved for future use,
+    // "Topic": Topic of the query, for later use
+}
+```
 Data Source Output Log: assuming only one document provided by each Datasource
 ```json
 {
-    "Source_ID":  The identifier for the data source,
-    "Digest": The digest of the output,
+    "LogID": "SourceID-Reranker",
+    "LoggerID":  The identifier of the data source,
+    "Output": The digest of the document,
+    "OutputTo": The identifier of the LLM/Re-ranker,
     "TimeStamp": The timestamp of the log
 }
 ```
 
-<!-- Omit for document-level traceback -->
-<!-- Re-ranker Output Log
+<!-- 
+Re-ranker Output Log
 ```json
 {
     "Input_Source_IDs": The list of input source IDs,
@@ -69,22 +83,27 @@ Data Source Output Log: assuming only one document provided by each Datasource
 LLM Output Log
 ```json
 {
-    "LLM_ID": LLM identifier,
-    "Input_Digests": The list of input digests,
+    "LogID": LLM identifier,
+    "Input": The list of input digests,
+    "InputFrom": The identifier of the Re-ranker,
     "Output_Digest": The digest of output
 }
 ```
 
-On-chain state definition
+<!-- On-chain state definition
 ```json
 {
     "State_ID": Datasoruce identifier or composite identifier for logs,
     "Type": Type of the state info,
     "Content": Score/Digest,
     "TimeStamp": The timestamp for the last update,
-    "Reserved": Reserved space for other use
+    "Reserved": Reserved space for future use
 }
-```
+``` -->
+
+# Current assumption
++ One document per source
++ Document-level tracing
 
 # Todo
 
