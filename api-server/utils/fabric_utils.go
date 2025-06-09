@@ -150,6 +150,11 @@ func readFirstFile(dirPath string) ([]byte, error) {
 
 // Format JSON data
 func formatJSON(data []byte) string {
+	// if the data is empty, return an empty string
+	if len(data) == 0 {
+		return "[]"
+	}
+
 	var prettyJSON bytes.Buffer
 	if err := json.Indent(&prettyJSON, data, "", "  "); err != nil {
 		panic(fmt.Errorf("failed to parse JSON: %w", err))
@@ -157,12 +162,7 @@ func formatJSON(data []byte) string {
 	return prettyJSON.String()
 }
 
-// =====================================================================================================================
-// For TESTING with asset-transfer-basic chaincode
-
-// This type of transaction would typically only be run once by an application the first time it was started after its
-// initial deployment. A new version of the chaincode deployed later would likely not need to run an "init" function.
-func basicInitLedger() {
+func InitLedgerTest() {
 	fmt.Printf("\n--> Submit Transaction: InitLedger, function creates the initial set of log records on the ledger \n")
 
 	_, err := ClientContract.SubmitTransaction("InitLedger")
@@ -174,10 +174,10 @@ func basicInitLedger() {
 }
 
 // Evaluate a transaction to query ledger state.
-func basicGetAllLogRecords() {
-	fmt.Println("\n--> Evaluate Transaction: GetAllLogRecords, function returns all the current log records on the ledger")
+func testGetAllLogRecord() {
+	fmt.Println("\n--> Evaluate Transaction: GetAllLogRecord, function returns all the current log records on the ledger")
 
-	evaluateResult, err := ClientContract.EvaluateTransaction("GetAllLogRecords")
+	evaluateResult, err := ClientContract.EvaluateTransaction("GetAllRecords")
 	if err != nil {
 		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
 	}
@@ -187,7 +187,7 @@ func basicGetAllLogRecords() {
 }
 
 // Submit a transaction synchronously, blocking until it has been committed to the ledger.
-func basicCreateLogRecord() {
+func testCreateLogRecord() {
 	fmt.Printf("\n--> Submit Transaction: CreateLogRecord, creates new log record with logID, loggerID, input, inputFrom, output, outputTo, timestamp and reserved arguments \n")
 
 	_, err := ClientContract.SubmitTransaction("CreateLogRecord", "test_log_id", "test_logger_id", "test_input", "test_input_from", "test_output", "test_output_to", "test_timestamp", "test_reserved")
@@ -198,7 +198,7 @@ func basicCreateLogRecord() {
 	fmt.Printf("*** Transaction committed successfully\n")
 }
 
-func basicGetAllReliabilityRecords() {
+func testGetAllReliabilityRecords() {
 	fmt.Println("\n--> Evaluate Transaction: GetAllReliabilityRecords, function returns all the current reliability records on the ledger")
 
 	evaluateResult, err := ClientContract.EvaluateTransaction("GetAllReliabilityRecords")
@@ -210,10 +210,10 @@ func basicGetAllReliabilityRecords() {
 	fmt.Printf("*** Result:%s\n", result)
 }
 
-func basicCreateReliabilityRecord() {
-	fmt.Printf("\n--> Submit Transaction: CreateReliabilityRecord, creates new reliability record with datasourceID\n")
+func testCreateReliabilityRecord() {
+	fmt.Printf("\n--> Submit Transaction: CreateReliabilityRecord, creates new reliability record with datasourceID and test_digest\n")
 
-	_, err := ClientContract.SubmitTransaction("CreateReliabilityRecord", "test_data_source_id")
+	_, err := ClientContract.SubmitTransaction("CreateReliabilityRecord", "test_data_source_id", "test_digest")
 	if err != nil {
 		panic(fmt.Errorf("failed to submit transaction: %w", err))
 	}
@@ -221,10 +221,7 @@ func basicCreateReliabilityRecord() {
 	fmt.Printf("*** Transaction committed successfully\n")
 }
 
-// END basic TESTING
-// =====================================================================================================================
-
-func createLogRecord(logID string, loggerID string, input string, inputFrom string, output string, outputTo string, timestamp string, reserved string) {
+func CreateLogRecord(logID string, loggerID string, input string, inputFrom string, output string, outputTo string, timestamp string, reserved string) {
 	// fmt.Printf("\n--> Submit Transaction: CreateRecord, creates new record with droneID, zip, flytime, flyrecord and reserved arguments \n")
 
 	_, err := ClientContract.SubmitTransaction("CreateLogRecord", logID, loggerID, input, inputFrom, output, outputTo, timestamp, reserved)
@@ -238,71 +235,75 @@ func createLogRecord(logID string, loggerID string, input string, inputFrom stri
 	// fmt.Printf("*** Transaction committed successfully\n")
 }
 
-func createLogRecordAsync(logID string, loggerID string, input string, inputFrom string, output string, outputTo string, timestamp string, reserved string) {
-	// fmt.Printf("\n--> Submit Transaction: CreateRecord, creates new record with droneID, zip, flytime, flyrecord and reserved arguments \n")
-
-	submitResult, commit, err := ClientContract.SubmitAsync("CreateLogRecord", client.WithArguments(logID, loggerID, input, inputFrom, output, outputTo, timestamp, reserved))
+func CreateReliabilityRecord(dataSourceID string, digest string) {
+	_, err := ClientContract.SubmitTransaction("CreateReliabilityRecord", dataSourceID, digest)
 	if err != nil {
-		// panic(fmt.Errorf("failed to submit transaction asynchronously: %w", err))
-		fmt.Printf("failed to submit transaction asynchronously: %v\n", err)
-		// fmt.Printf("Please check if the record %s, %s, %s already exists\n", logID, loggerID, input)
-		return
+		panic(fmt.Errorf("failed to submit transaction: %w", err))
 	}
 
-	fmt.Printf("\n*** Successfully submitted transaction to store the record: %s_%s. Info: %s\n", logID, timestamp, string(submitResult))
-	// fmt.Println("*** Waiting for transaction commit.")
-
-	if commitStatus, err := commit.Status(); err != nil {
-		panic(fmt.Errorf("failed to get commit status: %w", err))
-	} else if !commitStatus.Successful {
-		panic(fmt.Errorf("transaction %s failed to commit with status: %d", commitStatus.TransactionID, int32(commitStatus.Code)))
-	}
-
-	// fmt.Printf("*** Transaction committed successfully\n")
+	fmt.Printf("*** Transaction committed successfully\n")
 }
 
-func getAllLogRecords() string {
+// func CreateLogRecordAsync(logID string, loggerID string, input string, inputFrom string, output string, outputTo string, timestamp string, reserved string) {
+// 	// fmt.Printf("\n--> Submit Transaction: CreateRecord, creates new record with droneID, zip, flytime, flyrecord and reserved arguments \n")
+
+// 	submitResult, commit, err := ClientContract.SubmitAsync("CreateLogRecord", client.WithArguments(logID, loggerID, input, inputFrom, output, outputTo, timestamp, reserved))
+// 	if err != nil {
+// 		// panic(fmt.Errorf("failed to submit transaction asynchronously: %w", err))
+// 		fmt.Printf("failed to submit transaction asynchronously: %v\n", err)
+// 		// fmt.Printf("Please check if the record %s, %s, %s already exists\n", logID, loggerID, input)
+// 		return
+// 	}
+
+// 	fmt.Printf("\n*** Successfully submitted transaction to store the record: %s_%s. Info: %s\n", logID, timestamp, string(submitResult))
+// 	// fmt.Println("*** Waiting for transaction commit.")
+
+// 	if commitStatus, err := commit.Status(); err != nil {
+// 		panic(fmt.Errorf("failed to get commit status: %w", err))
+// 	} else if !commitStatus.Successful {
+// 		panic(fmt.Errorf("transaction %s failed to commit with status: %d", commitStatus.TransactionID, int32(commitStatus.Code)))
+// 	}
+
+// 	// fmt.Printf("*** Transaction committed successfully\n")
+// }
+
+func GetAllLogRecords() string {
 	// fmt.Println("\n--> Evaluate Transaction: GetAllRecords, function returns all the current records on the ledger")
 
-	evaluateResult, err := ClientContract.EvaluateTransaction("GetAllLogRecords")
+	selector := `{"selector": {"type": "log"}}`
+	return getRecordWithSelector(selector)
+}
+
+func GetAllReliabilityRecords() string {
+	selector := `{"selector": {"type": "reliability"}}`
+	return getRecordWithSelector(selector)
+}
+
+func GetLogRecord(logID string) string {
+	evaluateResult, err := ClientContract.EvaluateTransaction("ReadLogRecord", logID)
 	if err != nil {
 		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
 	}
 	result := formatJSON(evaluateResult)
+	fmt.Printf("*** Result:%s\n", result)
 
-	// fmt.Printf("*** Result:%s\n", result)
 	return result
 }
 
-func getAllReliabilityRecords() string {
-	evaluateResult, err := ClientContract.EvaluateTransaction("GetAllReliabilityRecords")
+func GetReliabilityRecord(dataSourceID string) string {
+	evaluateResult, err := ClientContract.EvaluateTransaction("ReadReliabilityRecord", dataSourceID)
 	if err != nil {
 		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
 	}
 	result := formatJSON(evaluateResult)
-
+	fmt.Printf("*** Result:%s\n", result)
 	return result
 }
 
-func getAllReliabilityRecordsForOneDataSource(dataSourceID string) string {
-	evaluateResult, err := ClientContract.EvaluateTransaction("GetAllReliabilityRecordsForOneDataSource", dataSourceID)
-	if err != nil {
-		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
-	}
-	result := formatJSON(evaluateResult)
-
-	return result
-}
-
-func getLogRecord(logID string) string {
-	evaluateResult, err := ClientContract.EvaluateTransaction("GetLogRecord", logID)
-	if err != nil {
-		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
-	}
-	result := formatJSON(evaluateResult)
-
-	return result
-}
+// func getAllLogRecords() string {
+// 	selector := `{"selector": {"type": "log"}}`
+// 	return getRecordWithSelector(selector)
+// }
 
 func getRecordWithSelector(selector string) string {
 	// fmt.Println("\n--> Evaluate Transaction: GetAllRecords, function returns all the current records on the ledger")
@@ -311,31 +312,59 @@ func getRecordWithSelector(selector string) string {
 	if err != nil {
 		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
 	}
+
 	result := formatJSON(evaluateResult)
 
-	// fmt.Printf("*** Result:%s\n", result)
+	fmt.Printf("*** Result:%s\n", result)
 	return result
 }
 
-func helloFabric() string {
-	// fmt.Println("\n--> Evaluate Transaction: Hello, function returns a greeting message to check if the chaincode is alive")
-	evaluateResult, err := ClientContract.EvaluateTransaction("Hello")
+func UpdateReliabilityRecord(dataSourceID string, reliabilityScore float32) {
+	_, err := ClientContract.SubmitTransaction("UpdateReliabilityScore", dataSourceID, fmt.Sprintf("%f", reliabilityScore))
+	if err != nil {
+		panic(fmt.Errorf("failed to submit transaction: %w", err))
+	}
+
+	fmt.Printf("*** Transaction committed successfully\n")
+}
+
+func GetHistoryForRecord(logID string) string {
+	evaluateResult, err := ClientContract.EvaluateTransaction("GetHistoryForRecord", logID)
 	if err != nil {
 		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
 	}
-	result := string(evaluateResult)
-
+	result := formatJSON(evaluateResult)
+	fmt.Printf("*** Result:%s\n", result)
 	return result
 }
 
 // // main function
-// func main() {
-// 	InitGateway()
-// 	basicInitLedger()
-// 	basicCreateLogRecord()
-// 	basicGetAllLogRecords()
-// 	basicCreateReliabilityRecord()
-// 	basicGetAllReliabilityRecords()
-// 	basicGetAllReliabilityRecordsForOneDataSource("test_data_source_id")
-// 	basicGetLogRecord("test_log_id")
-// }
+func main() {
+	InitGateway()
+	fmt.Println("InitGateway")
+	// testInitLedger()
+	// fmt.Println("testInitLedger")
+	// testCreateLogRecord()
+	// fmt.Println("testCreateLogRecord done")
+
+	// selector := `{"selector": {"logID": "test_log_id"}}`
+	// getRecordWithSelector(selector)
+
+	// selector = `{"selector": {"logID": "default0", "type": "reliability"}}`
+	// getRecordWithSelector(selector)
+
+	// selector = `{"selector": {"logID": "default0", "type": "log"}}`
+	// getRecordWithSelector(selector)
+
+	GetAllReliabilityRecords()
+
+	GetAllLogRecords()
+
+	GetLogRecord("default0-reranker0")
+	GetReliabilityRecord("default0")
+
+	UpdateReliabilityRecord("default0", 0.9)
+	GetReliabilityRecord("default0")
+	GetHistoryForRecord("default0")
+
+}

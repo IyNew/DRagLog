@@ -1,0 +1,257 @@
+package main
+
+import (
+	"context"
+	"draglog_api/utils"
+	"encoding/json"
+	"fmt"
+	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/danielgtaylor/huma/v2/humacli"
+	"github.com/go-chi/chi/v5"
+)
+
+type LogRecord struct {
+	LogID            string  `json:"logID" default:"default0-reranker0"`
+	LoggerID         string  `json:"loggerID" default:"reranker"`
+	Type             string  `json:"type" default:"log"`
+	Input            string  `json:"input" default:"test_input"`
+	InputFrom        string  `json:"inputFrom" default:"test_input_from"`
+	Output           string  `json:"output" default:"test_output"`
+	OutputTo         string  `json:"outputTo" default:"test_output_to"`
+	ReliabilityScore float32 `json:"reliabilityScore" default:"-1"`
+	Timestamp        string  `json:"timestamp" default:"test_timestamp"`
+	Reserved         string  `json:"reserved" default:"test_reserved"`
+}
+
+type LogRecordResponse struct {
+	Body struct {
+		Message string      `json:"message" doc:"Response message"`
+		Records []LogRecord `json:"records" doc:"List of log records"`
+	}
+}
+
+type LogRecordHistory struct {
+	Record    *LogRecord `json:"record"`
+	Timestamp string     `json:"timestamp"`
+	TxId      string     `json:"txID"`
+	IsDelete  bool       `json:"isDelete"`
+}
+
+type LogRecordHistoryResponse struct {
+	Body struct {
+		Message string             `json:"message" doc:"Response message"`
+		History []LogRecordHistory `json:"history" doc:"List of log record histories"`
+	}
+}
+
+type Selector struct {
+	Body struct {
+		Selector string `json:"selector" doc:"Selector" default:"{\"selector\": {\"type\": \"log\"}}"`
+	}
+}
+
+type Options struct {
+	Port int `help:"Port to listen on" short:"p" default:"8080"`
+}
+
+func main() {
+	utils.InitGateway()
+
+	// create a huma cli app which takes a port option
+	cli := humacli.New(func(hooks humacli.Hooks, options *Options) {
+		// Create a new router & API
+		router := chi.NewMux()
+		api := humachi.New(router, huma.DefaultConfig("My API", "1.0.0"))
+
+		// Register GET /init-ledger
+		huma.Register(api, huma.Operation{
+			OperationID: "initLedger",
+			Method:      http.MethodGet,
+			Path:        "/init-ledger",
+			Summary:     "Init the ledger",
+			Description: "Init the ledger",
+			Tags:        []string{"Init"},
+		}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+			utils.InitLedgerTest()
+			return &struct{}{}, nil
+		})
+
+		// Register GET /CreateLogRecord
+		huma.Register(api, huma.Operation{
+			OperationID: "CreateLogRecord",
+			Method:      http.MethodPost,
+			Path:        "/create-log-record",
+			Summary:     "Create a log record",
+			Description: "Create a new log record with the provided details",
+			Tags:        []string{"Create"},
+		}, func(ctx context.Context, input *struct {
+			Body LogRecord `json:"body" doc:"Log record details"`
+		}) (*struct{}, error) {
+			utils.CreateLogRecord(
+				input.Body.LogID,
+				input.Body.LoggerID,
+				input.Body.Input,
+				input.Body.InputFrom,
+				input.Body.Output,
+				input.Body.OutputTo,
+				input.Body.Timestamp,
+				input.Body.Reserved,
+			)
+			return &struct{}{}, nil
+		})
+
+		// Register POST /create-reliability-record
+		huma.Register(api, huma.Operation{
+			OperationID: "CreateReliabilityRecord",
+			Method:      http.MethodPost,
+			Path:        "/create-reliability-record",
+			Summary:     "Create a reliability record",
+			Description: "Create a new reliability record",
+			Tags:        []string{"Create"},
+		}, func(ctx context.Context, input *struct {
+			Body struct {
+				DataSourceID string `json:"dataSourceID" doc:"Data source ID"`
+				Digest       string `json:"digest" doc:"Digest value"`
+			}
+		}) (*struct{}, error) {
+			utils.CreateReliabilityRecord(input.Body.DataSourceID, input.Body.Digest)
+			return &struct{}{}, nil
+		})
+
+		// Register GET /get-all-log-records
+		huma.Register(api, huma.Operation{
+			OperationID: "GetAllLogRecords",
+			Method:      http.MethodGet,
+			Path:        "/get-all-log-records",
+			Summary:     "Get all log records",
+			Description: "Get all log records from the ledger",
+			Tags:        []string{"Get"},
+		}, func(ctx context.Context, input *struct{}) (*LogRecordResponse, error) {
+			result := utils.GetAllLogRecords()
+			var records []LogRecord
+			if err := json.Unmarshal([]byte(result), &records); err != nil {
+				return nil, fmt.Errorf("failed to parse log records: %w", err)
+			}
+			resp := &LogRecordResponse{}
+			resp.Body.Message = fmt.Sprintf("Found %d log records", len(records))
+			resp.Body.Records = records
+			return resp, nil
+		})
+
+		// Register GET /get-all-reliability-records
+		huma.Register(api, huma.Operation{
+			OperationID: "GetAllReliabilityRecords",
+			Method:      http.MethodGet,
+			Path:        "/get-all-reliability-records",
+			Summary:     "Get all reliability records",
+			Description: "Get all reliability records from the ledger",
+			Tags:        []string{"Get"},
+		}, func(ctx context.Context, input *struct{}) (*LogRecordResponse, error) {
+			result := utils.GetAllReliabilityRecords()
+			var records []LogRecord
+			if err := json.Unmarshal([]byte(result), &records); err != nil {
+				return nil, fmt.Errorf("failed to parse reliability records: %w", err)
+			}
+			resp := &LogRecordResponse{}
+			resp.Body.Message = fmt.Sprintf("Found %d reliability records", len(records))
+			resp.Body.Records = records
+			return resp, nil
+		})
+
+		// Register GET /get-log-record/{logID}
+		huma.Register(api, huma.Operation{
+			OperationID: "GetLogRecord",
+			Method:      http.MethodGet,
+			Path:        "/get-log-record/{logID}",
+			Summary:     "Get a log record",
+			Description: "Get a specific log record by ID",
+			Tags:        []string{"Get"},
+		}, func(ctx context.Context, input *struct {
+			LogID string `path:"logID" doc:"Log record ID"`
+		}) (*LogRecordResponse, error) {
+			result := utils.GetLogRecord(input.LogID)
+			var record LogRecord
+			if err := json.Unmarshal([]byte(result), &record); err != nil {
+				return nil, fmt.Errorf("failed to parse log record: %w", err)
+			}
+			resp := &LogRecordResponse{}
+			resp.Body.Message = "Found log record"
+			resp.Body.Records = []LogRecord{record}
+			return resp, nil
+		})
+
+		// Register GET /get-reliability-record/{dataSourceID}
+		huma.Register(api, huma.Operation{
+			OperationID: "GetReliabilityRecord",
+			Method:      http.MethodGet,
+			Path:        "/get-reliability-record/{dataSourceID}",
+			Summary:     "Get a reliability record",
+			Description: "Get a specific reliability record by data source ID",
+			Tags:        []string{"Get"},
+		}, func(ctx context.Context, input *struct {
+			DataSourceID string `path:"dataSourceID" doc:"Data source ID"`
+		}) (*LogRecordResponse, error) {
+			result := utils.GetReliabilityRecord(input.DataSourceID)
+			var record LogRecord
+			if err := json.Unmarshal([]byte(result), &record); err != nil {
+				return nil, fmt.Errorf("failed to parse reliability record: %w", err)
+			}
+			resp := &LogRecordResponse{}
+			resp.Body.Message = "Found reliability record"
+			resp.Body.Records = []LogRecord{record}
+			return resp, nil
+		})
+
+		// Register PUT /update-reliability-record/{dataSourceID}
+		huma.Register(api, huma.Operation{
+			OperationID: "UpdateReliabilityRecord",
+			Method:      http.MethodPut,
+			Path:        "/update-reliability-record/{dataSourceID}",
+			Summary:     "Update a reliability record",
+			Description: "Update the reliability score for a specific data source",
+			Tags:        []string{"Update"},
+		}, func(ctx context.Context, input *struct {
+			DataSourceID string `path:"dataSourceID" doc:"Data source ID"`
+			Body         struct {
+				ReliabilityScore float32 `json:"reliabilityScore" doc:"New reliability score"`
+			}
+		}) (*struct{}, error) {
+			utils.UpdateReliabilityRecord(input.DataSourceID, input.Body.ReliabilityScore)
+			return &struct{}{}, nil
+		})
+
+		// Register GET /get-history-for-record/{logID}
+		huma.Register(api, huma.Operation{
+			OperationID: "GetHistoryForRecord",
+			Method:      http.MethodGet,
+			Path:        "/get-history-for-record/{logID}",
+			Summary:     "Get record history",
+			Description: "Get the history of changes for a specific record",
+			Tags:        []string{"Get"},
+		}, func(ctx context.Context, input *struct {
+			LogID string `path:"logID" doc:"Log record ID"`
+		}) (*LogRecordHistoryResponse, error) {
+			result := utils.GetHistoryForRecord(input.LogID)
+			var history []LogRecordHistory
+			if err := json.Unmarshal([]byte(result), &history); err != nil {
+				return nil, fmt.Errorf("failed to parse record history: %w", err)
+			}
+			resp := &LogRecordHistoryResponse{}
+			resp.Body.Message = fmt.Sprintf("Found %d history records", len(history))
+			resp.Body.History = history
+			return resp, nil
+		})
+
+		// Start the server
+		hooks.OnStart(func() {
+			fmt.Printf("Starting server on port %d...\n", options.Port)
+			http.ListenAndServe(fmt.Sprintf(":%d", options.Port), router)
+		})
+	})
+
+	// Run the CLI
+	cli.Run()
+}

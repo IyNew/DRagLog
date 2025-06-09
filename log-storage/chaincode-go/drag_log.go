@@ -277,14 +277,14 @@ func (s *SimpleChaincode) InitLedger(ctx contractapi.TransactionContextInterface
 	return nil
 }
 
-// GetLogRecord returns the log record for the given log ID
-func (s *SimpleChaincode) GetLogRecord(ctx contractapi.TransactionContextInterface, logID string) (*LogRecord, error) {
-	logRecord, err := s.ReadLogRecord(ctx, logID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read the log record for the log ID %s: %v", logID, err)
-	}
-	return logRecord, nil
-}
+// // GetLogRecord returns the log record for the given log ID
+// func (s *SimpleChaincode) GetLogRecord(ctx contractapi.TransactionContextInterface, logID string) (*LogRecord, error) {
+// 	logRecord, err := s.ReadLogRecord(ctx, logID)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to read the log record for the log ID %s: %v", logID, err)
+// 	}
+// 	return logRecord, nil
+// }
 
 // GetAllReliabilityRecords returns all reliability records found in world state
 func (s *SimpleChaincode) GetAllRecords(ctx contractapi.TransactionContextInterface) ([]LogRecord, error) {
