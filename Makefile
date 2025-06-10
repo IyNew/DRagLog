@@ -34,7 +34,7 @@ draglog_couchdb_deploy: down network_up_couchdb
 api_server: 
 	cd $(API_SERVER_SRC) && go run main.go
 
-all: drp_couchdb_deploy api_server
+all: draglog_couchdb_deploy api_server
 
 down:
 	cd $(FABRIC_TEST_NETWORK_SRC) && ./network.sh down

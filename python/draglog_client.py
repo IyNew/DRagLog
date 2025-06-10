@@ -2,6 +2,7 @@ import requests
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 from datetime import datetime
+from ctypes import c_float as float32
 
 @dataclass
 class LogRecord:
@@ -15,6 +16,19 @@ class LogRecord:
     reliabilityScore: float  # -1 for log
     timestamp: str
     reserved: str
+
+@dataclass
+class LogRecordInput:
+    logID: str  # logID or dataSourceID
+    loggerID: str
+    input: str
+    inputFrom: str
+    output: str
+    outputTo: str
+    timestamp: str
+    reserved: str
+    type: str = "log"  
+    reliabilityScore: float32 = -1
 
 @dataclass
 class LogRecordHistory:
@@ -46,19 +60,25 @@ class DragLogClient:
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
         response = requests.request(method, url, **kwargs)
         response.raise_for_status()
+        
+        # Return empty dict if response is empty
+        if not response.content:
+            return {}
+            
         return response.json()
     
     def init_ledger(self) -> None:
         """Initialize the ledger."""
         self._make_request('GET', '/init-ledger')
     
-    def create_log_record(self, record: LogRecord) -> None:
+    def create_log_record(self, record: LogRecordInput) -> None:
         """Create a new log record.
         
         Args:
-            record: LogRecord object containing the record details
+            record: LogRecordInput object containing the record details
         """
-        self._make_request('POST', '/create-log-record', json={"body": record.__dict__})
+        # print({"body": record.__dict__})
+        self._make_request('POST', '/create-log-record', json=record.__dict__)
     
     def create_reliability_record(self, data_source_id: str, digest: str) -> None:
         """Create a new reliability record.
@@ -68,7 +88,7 @@ class DragLogClient:
             digest: Digest value
         """
         self._make_request('POST', '/create-reliability-record', 
-                          json={"body": {"dataSourceID": data_source_id, "digest": digest}})
+                          json={"dataSourceID": data_source_id, "digest": digest})
     
     def get_all_log_records(self) -> List[LogRecord]:
         """Get all log records.
@@ -77,7 +97,8 @@ class DragLogClient:
             List of LogRecord objects
         """
         response = self._make_request('GET', '/get-all-log-records')
-        return [LogRecord(**record) for record in response['body']['records']]
+
+        return [LogRecord(**record) for record in response['records']]
     
     def get_all_reliability_records(self) -> List[LogRecord]:
         """Get all reliability records.
@@ -86,7 +107,7 @@ class DragLogClient:
             List of LogRecord objects
         """
         response = self._make_request('GET', '/get-all-reliability-records')
-        return [LogRecord(**record) for record in response['body']['records']]
+        return [LogRecord(**record) for record in response['records']]
     
     def get_log_record(self, log_id: str) -> LogRecord:
         """Get a specific log record.
@@ -98,7 +119,7 @@ class DragLogClient:
             LogRecord object
         """
         response = self._make_request('GET', f'/get-log-record/{log_id}')
-        return LogRecord(**response['body']['records'][0])
+        return LogRecord(**response['records'][0])
     
     def get_reliability_record(self, data_source_id: str) -> LogRecord:
         """Get a specific reliability record.
@@ -110,7 +131,7 @@ class DragLogClient:
             LogRecord object
         """
         response = self._make_request('GET', f'/get-reliability-record/{data_source_id}')
-        return LogRecord(**response['body']['records'][0])
+        return LogRecord(**response['records'][0])
     
     def update_reliability_record(self, data_source_id: str, reliability_score: float) -> None:
         """Update a reliability record's score.
@@ -120,7 +141,7 @@ class DragLogClient:
             reliability_score: New reliability score
         """
         self._make_request('PUT', f'/update-reliability-record/{data_source_id}',
-                          json={"body": {"reliabilityScore": reliability_score}})
+                          json={"reliabilityScore": reliability_score})
     
     def get_history_for_record(self, log_id: str) -> List[LogRecordHistory]:
         """Get the history of a record.
@@ -137,7 +158,7 @@ class DragLogClient:
             timestamp=history['timestamp'],
             txID=history['txID'],
             isDelete=history['isDelete']
-        ) for history in response['body']['history']]
+        ) for history in response['history']]
 
 # Example usage:
 if __name__ == "__main__":
