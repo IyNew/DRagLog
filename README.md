@@ -37,14 +37,7 @@ sequenceDiagram
 ```
 
 # Data structures 
-Reliability Score 
-```json
-{
-    "SourceID": The identifier for the data source,
-    "Score": The score for the data source,
-    "TimeStamp": The timestamp of the last update
-}
-```
+General structure
 ```json
 {
 	"LogID": The id of the log,
@@ -55,9 +48,23 @@ Reliability Score
 	"OutputTo": Receiver's identifier,
 	"Timestamp": The timestamp of the log,  
 	"Reserved": reserved for future use,
+    "Type": "log" or "reliability",
+    "ReliabilityScore": score
     // "Topic": Topic of the query, for later use
 }
 ```
+
+Reliability Score 
+```json
+{
+    "LogID":  The identifier for the data source,
+    "ReliabilityScore":  The score for the data source,
+    "Type": "reliability",
+    "TimeStamp": The timestamp of the last update
+}
+```
+
+
 Data Source Output Log: assuming only one document provided by each Datasource
 ```json
 {
@@ -65,6 +72,7 @@ Data Source Output Log: assuming only one document provided by each Datasource
     "LoggerID":  The identifier of the data source,
     "Output": The digest of the document,
     "OutputTo": The identifier of the LLM/Re-ranker,
+    "Type": "log",
     "TimeStamp": The timestamp of the log
 }
 ```
@@ -86,6 +94,7 @@ LLM Output Log
     "LogID": LLM identifier,
     "Input": The list of input digests,
     "InputFrom": The identifier of the Re-ranker,
+    "Type": "log",
     "Output_Digest": The digest of output
 }
 ```
