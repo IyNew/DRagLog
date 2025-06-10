@@ -2,9 +2,7 @@
 REPO_SRC = $(shell pwd)
 FABRIC_TEST_NETWORK_SRC = $(REPO_SRC)/fabric-samples/test-network
 CONTRACT_SRC = $(REPO_SRC)/log-storage/chaincode-go
-API_SERVER_SRC = $(REPO_SRC)/api-server-fabric
-TEST_CONTRACT_SRC = $(REPO_SRC)/fabric-samples/asset-transfer-basic/chaincode-go
-
+API_SERVER_SRC = $(REPO_SRC)/api-server
 # check-prerequisite:
 # 	@echo "Check prerequisite"
 # 	@chmod +x pre-requisite.sh
@@ -30,14 +28,11 @@ network_up_couchdb:
 draglog_deploy: down network_up
 	cd $(FABRIC_TEST_NETWORK_SRC) && ./network.sh deployCC -ccn basic -ccp $(CONTRACT_SRC) -ccl go
 
-test_basic_deploy: down network_up
-	cd $(FABRIC_TEST_NETWORK_SRC) && ./network.sh deployCC -ccn basic -ccp $(TEST_CONTRACT_SRC) -ccl go
-
 draglog_couchdb_deploy: down network_up_couchdb
 	cd $(FABRIC_TEST_NETWORK_SRC) && ./network.sh deployCC -ccn basic -ccp $(CONTRACT_SRC) -ccl go 
 
 api_server: 
-	cd $(CLIENT_SRC) && go run main.go
+	cd $(API_SERVER_SRC) && go run main.go
 
 all: drp_couchdb_deploy api_server
 

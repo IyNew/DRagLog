@@ -5,14 +5,14 @@ from datetime import datetime
 
 @dataclass
 class LogRecord:
-    logID: str
+    logID: str  # logID or dataSourceID
     loggerID: str
-    type: str
+    type: str  # log or reliability
     input: str
     inputFrom: str
     output: str
     outputTo: str
-    reliabilityScore: float
+    reliabilityScore: float  # -1 for log
     timestamp: str
     reserved: str
 
