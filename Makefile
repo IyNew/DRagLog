@@ -1,4 +1,3 @@
-
 REPO_SRC = $(shell pwd)
 FABRIC_TEST_NETWORK_SRC = $(REPO_SRC)/fabric-samples/test-network
 CONTRACT_SRC = $(REPO_SRC)/log-storage/chaincode-go
@@ -31,13 +30,24 @@ draglog_deploy: down network_up
 draglog_couchdb_deploy: down network_up_couchdb
 	cd $(FABRIC_TEST_NETWORK_SRC) && ./network.sh deployCC -ccn basic -ccp $(CONTRACT_SRC) -ccl go 
 
+draglog_contract_update:
+	cd $(FABRIC_TEST_NETWORK_SRC) && ./network.sh deployCC -ccn basic -ccp $(CONTRACT_SRC) -ccl go 
+
 api_server: 
-	cd $(API_SERVER_SRC) && go run main.go
+	cd $(API_SERVER_SRC) && nohup go run main.go > api_server.log 2>&1 &
 
 all: draglog_couchdb_deploy api_server
 
 down:
 	cd $(FABRIC_TEST_NETWORK_SRC) && ./network.sh down
+	-kill -9 $(lsof -t -i:8080)
+
+
+
+# Stop the API server
+stop_api_server:
+	@echo "Stopping API server"
+	-kill -9 $(lsof -t -i:8080)
 
 # Clean command to remove all materials
 clean:

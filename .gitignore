@@ -52,3 +52,7 @@ build/
 
 # Fabric
 fabric-samples/
+
+# python
+python/__pycache__/
+logging_test.ipynb

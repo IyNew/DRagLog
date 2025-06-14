@@ -103,6 +103,31 @@ func main() {
 			return &struct{}{}, nil
 		})
 
+		// Register POST /create-feedback-record
+		// Register GET /CreateLogRecord
+		huma.Register(api, huma.Operation{
+			OperationID: "CreateFeedbackRecord",
+			Method:      http.MethodPost,
+			Path:        "/create-feedback-record",
+			Summary:     "Create a feedback record",
+			Description: "Create a new feedback record with the provided details",
+			Tags:        []string{"Create"},
+		}, func(ctx context.Context, input *struct {
+			Body LogRecord `json:"body" doc:"Log record details"`
+		}) (*struct{}, error) {
+			utils.CreateFeedbackRecord(
+				input.Body.LogID,
+				input.Body.LoggerID,
+				input.Body.Input,
+				input.Body.InputFrom,
+				input.Body.Output,
+				input.Body.OutputTo,
+				input.Body.Timestamp,
+				input.Body.Reserved,
+			)
+			return &struct{}{}, nil
+		})
+
 		// Register POST /create-reliability-record
 		huma.Register(api, huma.Operation{
 			OperationID: "CreateReliabilityRecord",
@@ -115,9 +140,10 @@ func main() {
 			Body struct {
 				DataSourceID string `json:"dataSourceID" doc:"Data source ID"`
 				Digest       string `json:"digest" doc:"Digest value"`
+				Reserved     string `json:"reserved" doc:"Reserved value"`
 			}
 		}) (*struct{}, error) {
-			utils.CreateReliabilityRecord(input.Body.DataSourceID, input.Body.Digest)
+			utils.CreateReliabilityRecord(input.Body.DataSourceID, input.Body.Digest, input.Body.Reserved)
 			return &struct{}{}, nil
 		})
 
@@ -157,6 +183,26 @@ func main() {
 			}
 			resp := &LogRecordResponse{}
 			resp.Body.Message = fmt.Sprintf("Found %d reliability records", len(records))
+			resp.Body.Records = records
+			return resp, nil
+		})
+
+		// Register GET /get-all-feedback-records
+		huma.Register(api, huma.Operation{
+			OperationID: "GetAllFeedbackRecords",
+			Method:      http.MethodGet,
+			Path:        "/get-all-feedback-records",
+			Summary:     "Get all feedback records",
+			Description: "Get all feedback records from the ledger",
+			Tags:        []string{"Get"},
+		}, func(ctx context.Context, input *struct{}) (*LogRecordResponse, error) {
+			result := utils.GetAllFeedbackRecords()
+			var records []LogRecord
+			if err := json.Unmarshal([]byte(result), &records); err != nil {
+				return nil, fmt.Errorf("failed to parse feedback records: %w", err)
+			}
+			resp := &LogRecordResponse{}
+			resp.Body.Message = fmt.Sprintf("Found %d feedback records", len(records))
 			resp.Body.Records = records
 			return resp, nil
 		})
@@ -217,10 +263,53 @@ func main() {
 			DataSourceID string `path:"dataSourceID" doc:"Data source ID"`
 			Body         struct {
 				ReliabilityScore float32 `json:"reliabilityScore" doc:"New reliability score"`
+				IsDelta          bool    `json:"isDelta" doc:"Is delta"`
 			}
 		}) (*struct{}, error) {
-			utils.UpdateReliabilityRecord(input.DataSourceID, input.Body.ReliabilityScore)
+			utils.UpdateReliabilityRecord(input.DataSourceID, input.Body.ReliabilityScore, input.Body.IsDelta)
 			return &struct{}{}, nil
+		})
+
+		// Register GET /get-feedback-record/{logID}
+		huma.Register(api, huma.Operation{
+			OperationID: "GetFeedbackRecord",
+			Method:      http.MethodGet,
+			Path:        "/get-feedback-record/{logID}",
+			Summary:     "Get a feedback record",
+		}, func(ctx context.Context, input *struct {
+			LogID string `path:"logID" doc:"Log record ID"`
+		}) (*LogRecordResponse, error) {
+			result := utils.GetFeedbackRecord(input.LogID)
+			var record LogRecord
+			if err := json.Unmarshal([]byte(result), &record); err != nil {
+				return nil, fmt.Errorf("failed to parse feedback record: %w", err)
+			}
+			resp := &LogRecordResponse{}
+			resp.Body.Message = "Found feedback record"
+			resp.Body.Records = []LogRecord{record}
+			return resp, nil
+		})
+
+		// Register GET /get-record-with-selector
+		huma.Register(api, huma.Operation{
+			OperationID: "GetRecordWithSelector",
+			Method:      http.MethodGet,
+			Path:        "/get-record-with-selector",
+			Summary:     "Get a record with a selector",
+		}, func(ctx context.Context, input *struct {
+			Body struct {
+				Selector string `json:"selector" doc:"Selector" default:"{\"selector\": {\"type\": \"log\"}}"`
+			}
+		}) (*LogRecordResponse, error) {
+			result := utils.GetRecordWithSelector(input.Body.Selector)
+			var records []LogRecord
+			if err := json.Unmarshal([]byte(result), &records); err != nil {
+				return nil, fmt.Errorf("failed to parse records: %w", err)
+			}
+			resp := &LogRecordResponse{}
+			resp.Body.Message = fmt.Sprintf("Found %d records", len(records))
+			resp.Body.Records = records
+			return resp, nil
 		})
 
 		// Register GET /get-history-for-record/{logID}

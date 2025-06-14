@@ -115,13 +115,31 @@ func (s *SimpleChaincode) ReadLogRecord(ctx contractapi.TransactionContextInterf
 	return &logRecord, nil
 }
 
+func (s *SimpleChaincode) ReadFeedbackRecord(ctx contractapi.TransactionContextInterface, logID string) (*LogRecord, error) {
+	feedbackRecordJSON, err := ctx.GetStub().GetState(logID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get the feedback record for the log ID %s: %v", logID, err)
+	}
+	if feedbackRecordJSON == nil {
+		return nil, fmt.Errorf("the feedback record for the log ID %s does not exist", logID)
+	}
+
+	var feedbackRecord LogRecord
+	err = json.Unmarshal(feedbackRecordJSON, &feedbackRecord)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal the feedback record for the log ID %s: %v", logID, err)
+	}
+
+	return &feedbackRecord, nil
+}
+
 func MD5Hash(text string) string {
 	hash := md5.New()
 	hash.Write([]byte(text))
 	return hex.EncodeToString(hash.Sum(nil))
 }
 
-func (s *SimpleChaincode) CreateReliabilityRecord(ctx contractapi.TransactionContextInterface, dataSourceID string, digest string) error {
+func (s *SimpleChaincode) CreateReliabilityRecord(ctx contractapi.TransactionContextInterface, dataSourceID string, digest string, reserved string) error {
 
 	// check if the reliability record already exists
 	exists, err := s.RecordExists(ctx, dataSourceID)
@@ -142,7 +160,7 @@ func (s *SimpleChaincode) CreateReliabilityRecord(ctx contractapi.TransactionCon
 		OutputTo:         "",
 		ReliabilityScore: 100,
 		Timestamp:        "0",
-		Reserved:         "",
+		Reserved:         reserved,
 	}
 
 	reliabilityRecordJSON, err := json.Marshal(reliabilityRecord)
@@ -194,14 +212,92 @@ func (s *SimpleChaincode) CreateLogRecord(ctx contractapi.TransactionContextInte
 	return nil
 }
 
+func (s *SimpleChaincode) CreateFeedbackRecord(ctx contractapi.TransactionContextInterface, logID string, loggerID string, input string, inputFrom string, output string, outputTo string, timestamp string, reserved string) error {
+	// check if the feedback record already exists with RecordExists
+	exists, err := s.RecordExists(ctx, logID)
+	if err != nil {
+		return fmt.Errorf("failed to check if the feedback record for the log ID %s exists: %v", logID, err)
+	}
+	if exists {
+		return fmt.Errorf("the feedback record for the log ID %s already exists", logID)
+	}
+
+	fmt.Printf("logID: %s\n", logID)
+	fmt.Printf("loggerID: %s\n", loggerID)
+	fmt.Printf("input: %s\n", input)
+	fmt.Printf("inputFrom: %s\n", inputFrom)
+	fmt.Printf("output: %s\n", output)
+	fmt.Printf("outputTo: %s\n", outputTo)
+	fmt.Printf("timestamp: %s\n", timestamp)
+	fmt.Printf("reserved: %s\n", reserved)
+
+	feedbackRecord := LogRecord{
+		LogID:            logID,
+		LoggerID:         loggerID,
+		Type:             "feedback",
+		Input:            input,
+		InputFrom:        inputFrom,
+		Output:           output,
+		OutputTo:         outputTo,
+		Timestamp:        timestamp,
+		ReliabilityScore: -1,
+		Reserved:         reserved,
+	}
+
+	fmt.Printf("feedback record: %v\n", feedbackRecord)
+	fmt.Printf("reserved field content: %s\n", reserved)
+
+	feedbackRecordJSON, err := json.Marshal(feedbackRecord)
+	if err != nil {
+		return fmt.Errorf("failed to marshal the feedback record for the log ID %s: %v", logID, err)
+	}
+
+	err = ctx.GetStub().PutState(logID, feedbackRecordJSON)
+	if err != nil {
+		return fmt.Errorf("failed to put the feedback record for the log ID %s: %v", logID, err)
+	}
+
+	// parse the reserved field into a list of [id, score]
+	// // example: reserved = "[[\"data/unreliable_large_source/sources_50.jsonl+916df390b8c436dc225ce59d63061245c28dfbc9545c064fef68d4721a59cdf8+1\", 0.001953125], [\"data/df_nq_valid_html_clean.jsonl+372dbac489b0fe04d85ae2cb23eafc294a0257c844705e9dd1a0fb7b82433fd3+2079\", 0.001953125], [\"data/df_nq_valid_html_clean.jsonl+2e8f02ca502f1d3724d0831fe6db2c662f6d722e14546a66bb1326098aa9d104+2478\", 0.001953125], [\"data/df_nq_valid_html_clean.jsonl+e95a31daefa032d5f6edf635926a5db5044b05ce4f2fe71f5fb743ee943a5b30+109\", 0.001953125]]"
+	// type ScoreItem struct {
+	// 	ID    string  `json:"0"`
+	// 	Score float64 `json:"1"`
+	// }
+	// var reservedList []ScoreItem
+	// err = json.Unmarshal([]byte(reserved), &reservedList)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to unmarshal the reserved field for the log ID %s: %v", logID, err)
+	// }
+
+	// // update the reliability score of the data source
+	// for _, item := range reservedList {
+	// 	dataSourceID := item.ID
+	// 	reliabilityScore := item.Score
+	// 	reliabilityScore = -reliabilityScore * 10
+	// 	err = s.UpdateReliabilityScore(ctx, dataSourceID, float32(reliabilityScore), true)
+	// 	if err != nil {
+	// 		return fmt.Errorf("failed to update the reliability score for the data source %s: %v", dataSourceID, err)
+	// 	}
+	// 	fmt.Printf("updated the reliability score for the data source %s to %f\n", dataSourceID, reliabilityScore)
+	// }
+
+	return nil
+}
+
 // update the reliability score of the data source
-func (s *SimpleChaincode) UpdateReliabilityScore(ctx contractapi.TransactionContextInterface, dataSourceID string, reliabilityScore float32) error {
+func (s *SimpleChaincode) UpdateReliabilityScore(ctx contractapi.TransactionContextInterface, dataSourceID string, score float32, isDelta bool) error {
 	reliabilityRecord, err := s.ReadReliabilityRecord(ctx, dataSourceID)
 	if err != nil {
 		return fmt.Errorf("failed to read the reliability record for the data source %s: %v", dataSourceID, err)
 	}
+	// print the current reliability record
+	fmt.Printf("reliability record: %v\n", reliabilityRecord)
 
-	reliabilityRecord.ReliabilityScore = reliabilityScore
+	if isDelta {
+		reliabilityRecord.ReliabilityScore += score
+	} else {
+		reliabilityRecord.ReliabilityScore = score
+	}
 
 	reliabilityRecordJSON, err := json.Marshal(reliabilityRecord)
 	if err != nil {
@@ -254,7 +350,7 @@ func (s *SimpleChaincode) InitLedger(ctx contractapi.TransactionContextInterface
 
 	// create 10 reliability records with datasource id like "default0", "default1" ...
 	for i := 0; i < 10; i++ {
-		err := s.CreateReliabilityRecord(ctx, fmt.Sprintf("default%d", i), "default")
+		err := s.CreateReliabilityRecord(ctx, fmt.Sprintf("default%d", i), "default", "")
 		if err != nil {
 			return fmt.Errorf("failed to create the initial reliability record for the data source %s: %v", fmt.Sprintf("default%d", i), err)
 		}
@@ -357,6 +453,12 @@ func (s *SimpleChaincode) QueryReliabilityRecords(ctx contractapi.TransactionCon
 // QueryLogRecords uses a query string to perform a query for log records.
 func (s *SimpleChaincode) QueryLogRecords(ctx contractapi.TransactionContextInterface, logID string) ([]*LogRecord, error) {
 	queryString := fmt.Sprintf(`{"selector":{"LogID":"%s", "Type":"log"}}`, logID)
+	return s.getQueryResultForQueryString(ctx, queryString)
+}
+
+// QueryFeedbackRecords uses a query string to perform a query for feedback records.
+func (s *SimpleChaincode) QueryFeedbackRecords(ctx contractapi.TransactionContextInterface, logID string) ([]*LogRecord, error) {
+	queryString := fmt.Sprintf(`{"selector":{"LogID":"%s", "Type":"feedback"}}`, logID)
 	return s.getQueryResultForQueryString(ctx, queryString)
 }
 
