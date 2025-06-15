@@ -239,6 +239,26 @@ func CreateReliabilityRecord(dataSourceID string, digest string, reserved string
 	}
 }
 
+func CreateReliabilityRecordAsync(dataSourceID string, digest string, reserved string) {
+	submitResult, commit, err := ClientContract.SubmitAsync("CreateReliabilityRecord", client.WithArguments(dataSourceID, digest, reserved))
+	if err != nil {
+		fmt.Printf("failed to submit transaction asynchronously: %v\n", err)
+		return
+	}
+
+	fmt.Printf("\n*** Successfully submitted transaction to store the record: %s. Info: %s\n", dataSourceID, string(submitResult))
+	fmt.Println("*** Waiting for transaction commit.")
+
+	commitStatus, err := commit.Status()
+	if err != nil {
+		panic(fmt.Errorf("failed to get commit status: %w", err))
+	}
+
+	if !commitStatus.Successful {
+		panic(fmt.Errorf("transaction %s failed to commit with status: %d", commitStatus.TransactionID, int32(commitStatus.Code)))
+	}
+}
+
 func CreateFeedbackRecord(logID string, loggerID string, input string, inputFrom string, output string, outputTo string, timestamp string, reserved string) {
 	_, err := ClientContract.SubmitTransaction("CreateFeedbackRecord", logID, loggerID, input, inputFrom, output, outputTo, timestamp, reserved)
 	if err != nil {

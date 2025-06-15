@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
@@ -57,8 +59,62 @@ type Options struct {
 	Port int `help:"Port to listen on" short:"p" default:"8080"`
 }
 
+var debug = true
+var debugLogFile *os.File
+
+func initDebugLog() error {
+	if !debug {
+		return nil
+	}
+
+	// Create logs directory if it doesn't exist
+	if err := os.MkdirAll("logs", 0755); err != nil {
+		return fmt.Errorf("failed to create logs directory: %w", err)
+	}
+
+	// Open log file with append mode
+	var err error
+	debugLogFile, err = os.OpenFile("logs/api_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open debug log file: %w", err)
+	}
+	return nil
+}
+
+func logDebugData(operation string, data interface{}) error {
+	if !debug || debugLogFile == nil {
+		return nil
+	}
+
+	logEntry := struct {
+		Timestamp string      `json:"timestamp"`
+		Operation string      `json:"operation"`
+		Data      interface{} `json:"data"`
+	}{
+		Timestamp: time.Now().Format(time.RFC3339),
+		Operation: operation,
+		Data:      data,
+	}
+
+	jsonData, err := json.Marshal(logEntry)
+	if err != nil {
+		return fmt.Errorf("failed to marshal debug data: %w", err)
+	}
+
+	if _, err := debugLogFile.Write(append(jsonData, '\n')); err != nil {
+		return fmt.Errorf("failed to write to debug log: %w", err)
+	}
+
+	return nil
+}
+
 func main() {
 	utils.InitGateway()
+
+	// Initialize debug logging if enabled
+	if err := initDebugLog(); err != nil {
+		fmt.Printf("Warning: Failed to initialize debug logging: %v\n", err)
+	}
 
 	// create a huma cli app which takes a port option
 	cli := humacli.New(func(hooks humacli.Hooks, options *Options) {
@@ -90,6 +146,9 @@ func main() {
 		}, func(ctx context.Context, input *struct {
 			Body LogRecord `json:"body" doc:"Log record details"`
 		}) (*struct{}, error) {
+			if err := logDebugData("create-log-record", input.Body); err != nil {
+				fmt.Printf("Warning: Failed to log debug data: %v\n", err)
+			}
 			utils.CreateLogRecord(
 				input.Body.LogID,
 				input.Body.LoggerID,
@@ -104,7 +163,6 @@ func main() {
 		})
 
 		// Register POST /create-feedback-record
-		// Register GET /CreateLogRecord
 		huma.Register(api, huma.Operation{
 			OperationID: "CreateFeedbackRecord",
 			Method:      http.MethodPost,
@@ -115,6 +173,9 @@ func main() {
 		}, func(ctx context.Context, input *struct {
 			Body LogRecord `json:"body" doc:"Log record details"`
 		}) (*struct{}, error) {
+			if err := logDebugData("create-feedback-record", input.Body); err != nil {
+				fmt.Printf("Warning: Failed to log debug data: %v\n", err)
+			}
 			utils.CreateFeedbackRecord(
 				input.Body.LogID,
 				input.Body.LoggerID,
@@ -143,7 +204,30 @@ func main() {
 				Reserved     string `json:"reserved" doc:"Reserved value"`
 			}
 		}) (*struct{}, error) {
+			if err := logDebugData("create-reliability-record", input.Body); err != nil {
+				fmt.Printf("Warning: Failed to log debug data: %v\n", err)
+			}
 			utils.CreateReliabilityRecord(input.Body.DataSourceID, input.Body.Digest, input.Body.Reserved)
+			return &struct{}{}, nil
+		})
+
+		// Register POST /create-reliability-record-async
+		huma.Register(api, huma.Operation{
+			OperationID: "CreateReliabilityRecordAsync",
+			Method:      http.MethodPost,
+			Path:        "/create-reliability-record-async",
+			Summary:     "Create a reliability record asynchronously",
+		}, func(ctx context.Context, input *struct {
+			Body struct {
+				DataSourceID string `json:"dataSourceID" doc:"Data source ID"`
+				Digest       string `json:"digest" doc:"Digest value"`
+				Reserved     string `json:"reserved" doc:"Reserved value"`
+			}
+		}) (*struct{}, error) {
+			if err := logDebugData("create-reliability-record-async", input.Body); err != nil {
+				fmt.Printf("Warning: Failed to log debug data: %v\n", err)
+			}
+			utils.CreateReliabilityRecordAsync(input.Body.DataSourceID, input.Body.Digest, input.Body.Reserved)
 			return &struct{}{}, nil
 		})
 
