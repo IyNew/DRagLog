@@ -211,6 +211,24 @@ func main() {
 			return &struct{}{}, nil
 		})
 
+		// Register POST /create-reliability-records-batch
+		huma.Register(api, huma.Operation{
+			OperationID: "CreateReliabilityRecordsBatch",
+			Method:      http.MethodPost,
+			Path:        "/create-reliability-records-batch",
+			Summary:     "Create reliability records in batch",
+		}, func(ctx context.Context, input *struct {
+			Body struct {
+				RecordsJSON string `json:"recordsJSON" doc:"JSON string of log records"`
+			}
+		}) (*struct{}, error) {
+			if err := logDebugData("create-reliability-records-batch", input.Body); err != nil {
+				fmt.Printf("Warning: Failed to log debug data: %v\n", err)
+			}
+			utils.CreateReliabilityRecordsBatch(input.Body.RecordsJSON)
+			return &struct{}{}, nil
+		})
+
 		// Register POST /create-reliability-record-async
 		huma.Register(api, huma.Operation{
 			OperationID: "CreateReliabilityRecordAsync",
@@ -348,9 +366,10 @@ func main() {
 			Body         struct {
 				ReliabilityScore float32 `json:"reliabilityScore" doc:"New reliability score"`
 				IsDelta          bool    `json:"isDelta" doc:"Is delta"`
+				Info             string  `json:"info" doc:"Info"`
 			}
 		}) (*struct{}, error) {
-			utils.UpdateReliabilityRecord(input.DataSourceID, input.Body.ReliabilityScore, input.Body.IsDelta)
+			utils.UpdateReliabilityRecord(input.DataSourceID, input.Body.ReliabilityScore, input.Body.IsDelta, input.Body.Info)
 			return &struct{}{}, nil
 		})
 

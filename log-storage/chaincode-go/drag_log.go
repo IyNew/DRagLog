@@ -147,7 +147,8 @@ func (s *SimpleChaincode) CreateReliabilityRecord(ctx contractapi.TransactionCon
 		return fmt.Errorf("failed to check if the reliability record for the data source %s exists: %v", dataSourceID, err)
 	}
 	if exists {
-		return fmt.Errorf("the reliability record for the data source %s already exists", dataSourceID)
+		fmt.Printf("the reliability record for the data source %s already exists, skipping\n", dataSourceID)
+		return nil
 	}
 
 	reliabilityRecord := LogRecord{
@@ -171,6 +172,41 @@ func (s *SimpleChaincode) CreateReliabilityRecord(ctx contractapi.TransactionCon
 	err = ctx.GetStub().PutState(dataSourceID, reliabilityRecordJSON)
 	if err != nil {
 		return fmt.Errorf("failed to put the reliability record for the data source %s: %v", dataSourceID, err)
+	}
+
+	return nil
+}
+
+// create reliability records in batch
+func (s *SimpleChaincode) CreateReliabilityRecordsBatch(ctx contractapi.TransactionContextInterface, recordsJSON string) error {
+	var records []LogRecord
+	err := json.Unmarshal([]byte(recordsJSON), &records)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal records: %v", err)
+	}
+
+	for _, record := range records {
+		// Check if record already exists
+		exists, err := s.RecordExists(ctx, record.LogID)
+		if err != nil {
+			return fmt.Errorf("failed to check if record %s exists: %v", record.LogID, err)
+		}
+		if exists {
+			fmt.Printf("record %s already exists, skipping\n", record.LogID)
+			continue
+		}
+
+		// Marshal the record
+		recordJSON, err := json.Marshal(record)
+		if err != nil {
+			return fmt.Errorf("failed to marshal record %s: %v", record.LogID, err)
+		}
+
+		// Put the record in the ledger
+		err = ctx.GetStub().PutState(record.LogID, recordJSON)
+		if err != nil {
+			return fmt.Errorf("failed to put record %s: %v", record.LogID, err)
+		}
 	}
 
 	return nil
@@ -285,7 +321,7 @@ func (s *SimpleChaincode) CreateFeedbackRecord(ctx contractapi.TransactionContex
 }
 
 // update the reliability score of the data source
-func (s *SimpleChaincode) UpdateReliabilityScore(ctx contractapi.TransactionContextInterface, dataSourceID string, score float32, isDelta bool) error {
+func (s *SimpleChaincode) UpdateReliabilityScore(ctx contractapi.TransactionContextInterface, dataSourceID string, score float32, isDelta bool, info string) error {
 	reliabilityRecord, err := s.ReadReliabilityRecord(ctx, dataSourceID)
 	if err != nil {
 		return fmt.Errorf("failed to read the reliability record for the data source %s: %v", dataSourceID, err)
@@ -297,6 +333,10 @@ func (s *SimpleChaincode) UpdateReliabilityScore(ctx contractapi.TransactionCont
 		reliabilityRecord.ReliabilityScore += score
 	} else {
 		reliabilityRecord.ReliabilityScore = score
+	}
+
+	if info != "" {
+		reliabilityRecord.Reserved += "," + info
 	}
 
 	reliabilityRecordJSON, err := json.Marshal(reliabilityRecord)

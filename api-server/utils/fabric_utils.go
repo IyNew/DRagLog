@@ -239,6 +239,15 @@ func CreateReliabilityRecord(dataSourceID string, digest string, reserved string
 	}
 }
 
+func CreateReliabilityRecordsBatch(recordsJSON string) {
+	_, err := ClientContract.SubmitTransaction("CreateReliabilityRecordsBatch", recordsJSON)
+	if err != nil {
+		fmt.Printf("failed to submit transaction: %v\n", err)
+		return
+	}
+}
+
+// TODO: add async version, not working yet
 func CreateReliabilityRecordAsync(dataSourceID string, digest string, reserved string) {
 	submitResult, commit, err := ClientContract.SubmitAsync("CreateReliabilityRecord", client.WithArguments(dataSourceID, digest, reserved))
 	if err != nil {
@@ -352,8 +361,8 @@ func GetRecordWithSelector(selector string) string {
 	return result
 }
 
-func UpdateReliabilityRecord(dataSourceID string, reliabilityScore float32, isDelta bool) {
-	_, err := ClientContract.SubmitTransaction("UpdateReliabilityScore", dataSourceID, fmt.Sprintf("%f", reliabilityScore), fmt.Sprintf("%t", isDelta))
+func UpdateReliabilityRecord(dataSourceID string, reliabilityScore float32, isDelta bool, info string) {
+	_, err := ClientContract.SubmitTransaction("UpdateReliabilityScore", dataSourceID, fmt.Sprintf("%f", reliabilityScore), fmt.Sprintf("%t", isDelta), info)
 	if err != nil {
 		fmt.Printf("failed to submit transaction: %v\n", err)
 		return
@@ -395,7 +404,7 @@ func main() {
 	GetLogRecord("default0-reranker0")
 	GetReliabilityRecord("default0")
 
-	UpdateReliabilityRecord("default0", 0.9, true)
+	UpdateReliabilityRecord("default0", 0.9, true, "test_info")
 	GetReliabilityRecord("default0")
 	GetHistoryForRecord("default0")
 
