@@ -40,14 +40,14 @@ all: draglog_couchdb_deploy api_server
 
 down:
 	cd $(FABRIC_TEST_NETWORK_SRC) && ./network.sh down
-	-kill -9 $(lsof -t -i:8080)
+	-lsof -t -i:8080 | xargs -r kill -15 2>/dev/null || true
 
 
 
 # Stop the API server
 stop_api_server:
 	@echo "Stopping API server"
-	-kill -9 $(lsof -t -i:8080)
+	-lsof -t -i:8080 | xargs -r kill -15 2>/dev/null || true
 
 # Clean command to remove all materials
 clean:

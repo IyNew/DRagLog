@@ -42,23 +42,22 @@ class LogRecordHistory:
     isDelete: bool
 
 class DragLogClient:
-    def __init__(self, base_url: str = "http://localhost:8080", debug: bool = False, debug_file: str = "draglog_debug.json", local: bool = False):
+    def __init__(self, base_url: str = "http://localhost:8080", local: bool = False, log_file: str = "logs/draglog.jsonl", reliability_history_path: str = "logs/reliability_history.jsonl"):
         """Initialize the DragLog client.
         
         Args:
             base_url: Base URL of the DragLog API server
-            debug: Whether to enable debug mode and store records in a file
-            debug_file: Path to the debug log file
             local: Whether to store records locally without making API requests
+            log_file: Path to the log file for local mode
         """
         self.base_url = base_url.rstrip('/')
-        self.debug = debug
-        self.debug_file = debug_file
         self.local = local
-        if self.debug or self.local:
-            # Initialize debug file if it doesn't exist
-            if not os.path.exists(self.debug_file):
-                with open(self.debug_file, 'w') as f:
+        self.log_file = log_file
+        self.reliability_history_path = reliability_history_path
+        if self.local:
+            # Initialize log file if it doesn't exist
+            if not os.path.exists(self.log_file):
+                with open(self.log_file, 'w') as f:
                     json.dump([], f)
         
     def _make_request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
@@ -76,9 +75,9 @@ class DragLogClient:
             # In local mode, return empty dict for GET requests
             if method == 'GET':
                 return {'records': []}
-            # For other methods, just write to debug file and return empty dict
+            # For other methods, just write to log file and return empty dict
             if 'json' in kwargs:
-                self._write_to_debug_file(kwargs['json'], f'{method.lower()}_{endpoint.replace("/", "_")}')
+                self._write_to_log_file(kwargs['json'], f'{method.lower()}_{endpoint.replace("/", "_")}')
             return {}
             
         try:
@@ -99,46 +98,81 @@ class DragLogClient:
         """Initialize the ledger."""
         self._make_request('GET', '/init-ledger')
     
-    def _write_to_debug_file(self, record: Dict[str, Any], operation: str) -> None:
-        """Write a record to the debug file in JSONL format.
+    def init_sources(self, sources: Dict) -> None:
+        """Initialize the sources, clean the reliability history file and log file if it exists."""
+        if os.path.exists(self.reliability_history_path):
+            os.remove(self.reliability_history_path)
+        if os.path.exists(self.log_file):
+            os.remove(self.log_file)
+        if self.local:
+            self.reliability_scores = {source_id: sources[source_id]['reliability'] for source_id in sources}
+            self.dump_reliability_records(last_feedback="")
+        else:
+            # create reliability records in batch
+            records_batch = []
+            for source_id in sources:
+                records_batch.append(LogRecord(
+                    logID=source_id,
+                    loggerID="",
+                    type="reliability",
+                    input="",
+                    inputFrom="",
+                    output="",
+                    outputTo="",
+                    reliabilityScore=sources[source_id]['reliability'],
+                    timestamp=datetime.now().isoformat(),
+                    reserved=""
+                ))
+            self.create_reliability_records_batch(records_batch)
+    
+    def dump_reliability_records(self, last_feedback: str) -> None:
+        """Dump the reliability records to a jsonl file."""
+        with open(self.reliability_history_path, 'a') as f:
+            # write the last feedback
+            f.write(last_feedback + '\n')
+            # write the reliability scores
+            f.write(json.dumps(self.reliability_scores) + '\n')
+    
+    def _write_to_log_file(self, record: Dict[str, Any], operation: str) -> None:
+        """Write a record to the log file in JSONL format.
         
         Args:
             record: The record to write
             operation: The operation performed (create, update, etc.)
         """
-        if not (self.debug or self.local):
+        if not self.local:
             return
             
         try:
-            debug_record = {
+            log_record = {
                 'timestamp': datetime.now().isoformat(),
                 'operation': operation,
                 'record': record
             }
             
             # Append the record as a single line
-            with open(self.debug_file, 'a') as f:
-                f.write(json.dumps(debug_record) + '\n')
+            with open(self.log_file, 'a') as f:
+                f.write(json.dumps(log_record) + '\n')
         except Exception as e:
-            print(f"Error writing to debug file: {e}")
+            print(f"Error writing to log file: {e}")
 
-    def _read_debug_records(self) -> List[Dict[str, Any]]:
-        """Read all records from the debug file.
+    def _read_log_records(self) -> List[Dict[str, Any]]:
+        """Read all records from the log file.
         
         Returns:
-            List of records from the debug file
+            List of records from the log file
         """
-        if not os.path.exists(self.debug_file):
+        if not os.path.exists(self.log_file):
             return []
             
         records = []
         try:
-            with open(self.debug_file, 'r') as f:
+            with open(self.log_file, 'r') as f:
                 for line in f:
                     if line.strip():  # Skip empty lines
                         records.append(json.loads(line))
         except Exception as e:
-            print(f"Error reading debug file: {e}")
+            print(f"Error reading log file: {e}")
         return records
 
     def create_log_record(self, record: LogRecordInput) -> None:
@@ -150,8 +184,6 @@ class DragLogClient:
         record.type = "log"
         record_dict = record.__dict__
         self._make_request('POST', '/create-log-record', json=record_dict)
-        if self.debug:
-            self._write_to_debug_file(record_dict, 'create_log_record')
     
     def create_feedback_record(self, record: LogRecordInput) -> None:
         """Create a new feedback record.
@@ -162,8 +194,6 @@ class DragLogClient:
         record.type = "feedback"
         record_dict = record.__dict__
         self._make_request('POST', '/create-feedback-record', json=record_dict)
-        if self.debug:
-            self._write_to_debug_file(record_dict, 'create_feedback_record')
     
     def create_reliability_record(self, data_source_id: str, digest: str, reserved: str) -> None:
         """Create a new reliability record.
@@ -173,15 +203,17 @@ class DragLogClient:
             digest: Digest value
             reserved: Reserved value
         """
-        # check if the record already exists
-        # if self.get_reliability_record(data_source_id):
-        #     print(f"Reliability record already exists for {data_source_id}")
-        #     return
         record_dict = {"dataSourceID": data_source_id, "digest": digest, "reserved": reserved}
         self._make_request('POST', '/create-reliability-record', json=record_dict)
-        if self.debug:
-            # print(f"Creating reliability record: {record_dict} in debug mode")
-            self._write_to_debug_file(record_dict, 'create_reliability_record')
+
+    def create_reliability_records_batch(self, records: List[LogRecord]) -> None:
+        """Create a new reliability record in batch.
+        
+        Args:
+            records: List of LogRecord objects
+        """
+        record_dict = {"recordsJSON": json.dumps([record.__dict__ for record in records])}
+        self._make_request('POST', '/create-reliability-records-batch', json=record_dict)
 
     def create_reliability_record_async(self, data_source_id: str, digest: str, reserved: str) -> None:
         """Create a new reliability record asynchronously.
@@ -193,8 +225,6 @@ class DragLogClient:
         """
         record_dict = {"dataSourceID": data_source_id, "digest": digest, "reserved": reserved}
         self._make_request('POST', '/create-reliability-record-async', json=record_dict)
-        if self.debug:
-            self._write_to_debug_file(record_dict, 'create_reliability_record_async')
     
     def get_all_log_records(self) -> List[LogRecord]:
         """Get all log records.
@@ -203,7 +233,7 @@ class DragLogClient:
             List of LogRecord objects
         """
         if self.local:
-            records = self._read_debug_records()
+            records = self._read_log_records()
             return [LogRecord(**record['record']) for record in records 
                    if record['operation'].startswith('create_log_record')]
             
@@ -217,7 +247,7 @@ class DragLogClient:
             List of LogRecord objects
         """
         if self.local:
-            records = self._read_debug_records()
+            records = self._read_log_records()
             return [LogRecord(**record['record']) for record in records 
                    if record['operation'].startswith('create_reliability_record')]
             
@@ -248,23 +278,29 @@ class DragLogClient:
         response = self._make_request('GET', f'/get-reliability-record/{data_source_id}')
         return LogRecord(**response['records'][0])
     
-    def update_reliability_record(self, data_source_id: str, reliability_score: float, is_delta: bool) -> None:
+    def get_reliability_score(self, data_source_id: str) -> float:
+        """Get the reliability score of a data source."""
+        if self.local:
+            return self.reliability_scores[data_source_id]
+        else:
+            return self.get_reliability_record(data_source_id).reliabilityScore
+
+    def update_reliability_record(self, data_source_id: str, reliability_score: float, is_delta: bool, info: str) -> None:
         """Update a reliability record's score.
         
         Args:
             data_source_id: ID of the data source
             reliability_score: New reliability score
+            is_delta: Whether the score is a delta or absolute value
+            info: Info
         """
-        # check if the record already exists
-        # if not self.get_reliability_record(data_source_id):
-        #     print(f"Reliability record does not exist for {data_source_id}")
-        #     return
-        record_dict = {"reliabilityScore": reliability_score, "isDelta": is_delta}
-        # print("update reliability record", record_dict)
+        if self.local:
+            if is_delta:
+                self.reliability_scores[data_source_id] += reliability_score
+            else:
+                self.reliability_scores[data_source_id] = reliability_score
+        record_dict = {"reliabilityScore": reliability_score, "isDelta": is_delta, "info": info}
         self._make_request('PUT', f'/update-reliability-record/{data_source_id}', json=record_dict)
-        record_dict["dataSourceID"] = data_source_id
-        if self.debug or self.local:
-            self._write_to_debug_file(record_dict, 'update_reliability_record')
     
     def get_history_for_record(self, log_id: str) -> List[LogRecordHistory]:
         """Get the history of a record.
@@ -333,3 +369,49 @@ def doc_to_sha256(doc):
     
     # Return the hexadecimal representation of the hash
     return sha256_hash.hexdigest()
+
+def log_record_to_json(record: LogRecord) -> str:
+    """
+    Convert a LogRecord dataclass instance to a JSON string.
+    
+    Args:
+        record (LogRecord): The LogRecord instance to convert
+        
+    Returns:
+        str: JSON string representation of the LogRecord
+    """
+    return json.dumps({
+        "logID": record.logID,
+        "loggerID": record.loggerID,
+        "type": record.type,
+        "input": record.input,
+        "inputFrom": record.inputFrom,
+        "output": record.output,
+        "outputTo": record.outputTo,
+        "reliabilityScore": record.reliabilityScore,
+        "timestamp": record.timestamp,
+        "reserved": record.reserved
+    })
+
+def log_record_to_dict(record: LogRecord) -> Dict[str, Any]:
+    """
+    Convert a LogRecord dataclass instance to a dictionary.
+    
+    Args:
+        record (LogRecord): The LogRecord instance to convert
+        
+    Returns:
+        Dict: Dictionary representation of the LogRecord
+    """
+    return {
+        "logID": record.logID,
+        "loggerID": record.loggerID,
+        "type": record.type,
+        "input": record.input,
+        "inputFrom": record.inputFrom,
+        "output": record.output,
+        "outputTo": record.outputTo,
+        "reliabilityScore": record.reliabilityScore,
+        "timestamp": record.timestamp,
+        "reserved": record.reserved
+    }
